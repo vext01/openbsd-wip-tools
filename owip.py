@@ -4,6 +4,7 @@ import sys
 import getopt
 import os.path
 import shutil
+import subprocess
 
 # --------------------------------------------------------
 # Various globals
@@ -75,8 +76,8 @@ def cmd_ci(path):
             if os.path.exists(wip_path):
                 sys.stdout.write("Merging '%s'..." % mystuff_path)
 
-                status = os.system("%s %s %s %s" % \
-                    (MERGE, wip_path, archive_path, mystuff_path))
+                print("I would run: %s" % ("%s %s %s %s" % (MERGE, wip_path, archive_path, mystuff_path)))
+                status = subprocess.call([MERGE, wip_path, archive_path, mystuff_path])
 
                 if status == MERGE_OK:
                     print("OK")
@@ -90,10 +91,13 @@ def cmd_ci(path):
                     if EDITOR is None:
                         EDITOR = "/usr/bin/vi"
 
-                    os.system("%s %s", wip_path)
+                    status = subprocess.call([EDITOR, wip_path])
+                    if status != 0:
+                        print("error: failed to invoke editor, merge it yourself ;)")
+                        sys.exit(1)
 
                 else:
-                    print("error: Merge failed: merge returned: %s" % status)
+                    print("error: Merge failed: merge returned: %d" % status)
                     sys.exit(1)
             else:
                 print("Copying in new file '%s'" % mystuff_path)
