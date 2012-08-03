@@ -6,13 +6,22 @@ import os.path
 import shutil
 
 # --------------------------------------------------------
-# Config - XXX read from file
+# Various globals
 # --------------------------------------------------------
 
+# paths
 WIP_PATH = "/usr/ports/openbsd-wip"
 MYSTUFF_PATH = "/usr/ports/mystuff"
 PORTS_PATH = "/usr/ports"
-ARCHIVE_PATH = "%s/.owip" % MYSTUFF_PATH
+ARCHIVE_PATH = os.path.join(MYSTUFF_PATH, ".owip")
+
+# bsd merge
+MERGE = "/usr/bin/merge"
+
+# merge return codes
+MERGE_OK = 0
+MERGE_CONFLICT = 1
+MERGE_ERROR = 2
 
 # --------------------------------------------------------
 # Commands
@@ -26,23 +35,69 @@ def cmd_new(path):
     check_path_shape(path)
 
     for tree in [WIP_PATH, PORTS_PATH, MYSTUFF_PATH]: 
-        if os.path.exists("%s/%s" % (tree, path)):
+        if os.path.exists(os.path.join(tree, path)):
             print("error: path already exists in %s" % tree)
             sys.exit(1)
 
     # Copy in a skeleton port
-    print("CREATE: %s/%s" % (MYSTUFF_PATH, path))
-    os.makedirs("%s/%s" % (MYSTUFF_PATH, path))
+    os.makedirs(os.path.join(MYSTUFF_PATH, path))
     shutil.copyfile(
-        "%s/infrastructure/templates/Makefile.template" % PORTS_PATH,
-        "%s/%s/Makefile" % (MYSTUFF_PATH, path))
+        os.path.join(PORTS_PATH, "infrastructure", "templates", "Makefile.template"),
+        os.path.join(MYSTUFF_PATH, path, "Makefile"))
 
     # Archive away a copy for merges
-    shutil.copytree("%s/%s" % (MYSTUFF_PATH, path), "%s/%s" % (ARCHIVE_PATH, path))
+    shutil.copytree(os.path.join(MYSTUFF_PATH, path), os.path.join(ARCHIVE_PATH, path))
         
 # merges code back into the tree
 def cmd_ci(path):
-    pass
+
+    # sanity checks
+    for tree in [MYSTUFF_PATH, ARCHIVE_PATH]:
+        if not os.path.exists(os.path.join(tree, path)):
+            print("error: can't find checkout in %s" % tree)
+            sys.exit(1)
+
+
+    check_path_shape(path)
+
+    for dirname, dirnames, filenames in os.walk(os.path.join(MYSTUFF_PATH, path)):
+        for fn in filenames:
+
+            mystuff_path = os.path.join(dirname, fn)
+            wip_path = mystuff_path.replace(MYSTUFF_PATH, WIP_PATH)
+            archive_path = mystuff_path.replace(MYSTUFF_PATH, ARCHIVE_PATH)
+
+            # incase of a new checkin, scaffold dirs
+            if not os.path.exists(os.path.dirname(wip_path)):
+               os.mkdir(os.path.dirname(wip_path))
+
+            # if the file exists, we merge
+            if os.path.exists(wip_path):
+                sys.stdout.write("Merging '%s'..." % mystuff_path)
+
+                status = os.system("%s %s %s %s" % \
+                    (MERGE, wip_path, archive_path, mystuff_path))
+
+                if status == MERGE_OK:
+                    print("OK")
+                elif status == MERGE_CONFLICT:
+                    print("\nThere was a merge conflict!")
+
+                    print("Hit enter to resolve this by hand")
+                    raw_input()
+
+                    EDITOR = os.getenv("EDITOR")
+                    if EDITOR is None:
+                        EDITOR = "/usr/bin/vi"
+
+                    os.system("%s %s", wip_path)
+
+                else:
+                    print("error: Merge failed: merge returned: %s" % status)
+                    sys.exit(1)
+            else:
+                print("Copying in new file '%s'" % mystuff_path)
+                shutil.copyfile(mystuff_path, wip_path)
 
 # discards work in your sandbox
 def cmd_trash(path):
