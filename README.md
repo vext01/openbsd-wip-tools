@@ -9,6 +9,7 @@ your own (unless you want it to).
 Prerequisites
 -------------
 
+ * You need Python-2.7.
  * In `/usr/ports` you have a checkout of the official ports tree from CVS.
  * In `/usr/ports/openbsd-wip` you have a git checkout of the unofficial WIP
    ports tree (https://github.com/jasperla/openbsd-wip/).
@@ -17,7 +18,7 @@ Prerequisites
    Eg. `PORTSDIR_PATH=${PORTSDIR}/mystuff:${PORTSDIR}`
  * `/usr/ports/mystuff/.owip` contains state for owip.py in the form
     of checkout-time backups of ports (so that merge(1) can work) and
-    an sqlite database for tracking state.
+    an sqlite3 database.
 
 Workflow
 --------
