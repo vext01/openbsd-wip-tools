@@ -18,8 +18,9 @@ PORTS_PATH = "/usr/ports"
 ARCHIVE_PATH = os.path.join(MYSTUFF_PATH, ".owip")
 DB_PATH = os.path.join(MYSTUFF_PATH, ".owip", "sandbox.db")
 
-# bsd merge
+# shell utils
 MERGE = "/usr/bin/merge"
+GIT = "/usr/local/bin/git"
 
 # merge return codes
 MERGE_OK = 0
@@ -75,16 +76,28 @@ def cmd_new(db, path):
 
 # merges code back into the tree
 def cmd_ci(db, path):
+    check_path_shape(path)
+    curs = db.cursor()
 
     # sanity checks
+    curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
+    rows = curs.fetchall()
+    if len(rows) != 1:
+        print("error: not checked out" % \
+            os.path.join(MYSTUFF_PATH, path))
+        sys.exit(1)
+
+    if rows[0][2] == STATUS_CONFLICT:
+        print("error: this path is in conflict. merge manually and use " + \
+            "'owip.py resolved %s" % path)
+        sys.exit(1)
+
     for tree in [MYSTUFF_PATH, ARCHIVE_PATH]:
         if not os.path.exists(os.path.join(tree, path)):
             print("error: can't find checkout in %s" % tree)
             sys.exit(1)
 
-
-    check_path_shape(path)
-
+    status = 0
     for dirname, dirnames, filenames in os.walk(os.path.join(MYSTUFF_PATH, path)):
         for fn in filenames:
 
@@ -106,6 +119,8 @@ def cmd_ci(db, path):
                 if status == MERGE_OK:
                     print("OK")
                 elif status == MERGE_CONFLICT:
+                    status = status | STATUS_CONFLICT
+
                     print("\nThere was a merge conflict!")
 
                     print("Hit enter to resolve this by hand")
@@ -122,10 +137,24 @@ def cmd_ci(db, path):
 
                 else:
                     print("error: Merge failed: merge returned: %d" % status)
+                    print("     : This sould not happen -- your sandbox state is inconsistent")
                     sys.exit(1)
             else:
                 print("Copying in new file '%s'" % mystuff_path)
                 shutil.copyfile(mystuff_path, wip_path)
+
+        if status & STATUS_CONFLICT != 0:
+            print("warning: merge conflicts occurred!")
+            print("       : if you were able to resolved these, " + \
+                "run 'owip.py resolved %s'" % path)
+            print("       : or you may wosh to run 'owip.py reset %s' " + \
+                "to roll back %s." % os.path.join(WIP_PATH, path))
+            print("       : if you do the latter your sandbox will remain untouched")
+        else:
+            curs.execute("DELETE FROM checkout WHERE pkgpath = ?", (path, ))
+            db.commit()
+            print("checkin was successful")
+            print("now use git to commit your work to openbsd-wip")
 
 # discards work in your sandbox
 def cmd_trash(db, path):
