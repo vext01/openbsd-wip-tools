@@ -35,7 +35,8 @@ Where pkgpath would be of the form `category/port`. This copys a skeleton port
 into your sandbox.
 
 When you want to work on an existing port, you would run:
-		owip.py co <tree> <pkgpath>
+
+        owip.py co <tree> <pkgpath>
 
 Where <pkgpath> would be of the form `category/port` and <tree> is
 either 'main' or 'wip' depending upon where the port should come from
@@ -44,11 +45,11 @@ either 'main' or 'wip' depending upon where the port should come from
 To see what you have checked out into your sandbox (and the status of
 your checkouts), run:
 
-		owip.py status
+        owip.py status
 
 Once you want to commit your work to the openbsd-wip repo:
 
-		owip.py ci <pkgpath>
+        owip.py ci <pkgpath>
 
 If all went well, then you can continue to use git to add new files and
 commit changes in your openbsd-wip checkout in /usr/ports/openbsd-wip.
@@ -56,7 +57,7 @@ commit changes in your openbsd-wip checkout in /usr/ports/openbsd-wip.
 If on the other hand a merge conflict occurs, then you will be guided through
 conflict resolution. After you have manually merged conflicts, you run:
 
-		owip.py resolved <pkgpath>
+        owip.py resolved <pkgpath>
 
 The only remaining command is the 'discard' command which discards a port
 in your sandbox without merging changes back into openbsd-wip.
