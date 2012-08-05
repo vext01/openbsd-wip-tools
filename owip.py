@@ -39,8 +39,57 @@ STATUS_CONFLICT = 1 << 0
 # --------------------------------------------------------
 
 # checks code out for work
-def cmd_co(db, path):
-    pass
+def cmd_co(db, tree_name, path):
+    check_path_shape(path)
+    curs = db.cursor()
+
+    # sanity checks
+    curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
+    if len(curs.fetchall()) != 0:
+        print("error: already checked out in %s" % \
+            os.path.join(MYSTUFF_PATH, path))
+        sys.exit(1)
+
+    if tree_name == "wip":
+        tree = WIP_PATH
+        origin = ORIGIN_WIP
+    elif tree_name ==  "main":
+        tree = PORTS_PATH
+        origin = ORIGIN_PORTS
+    else:
+        print("error: bad tree path. Should be either 'wip' or 'main'")
+        sys.exit(1)
+
+    if os.path.exists(os.path.join(MYSTUFF_PATH, path)):
+        print("error: destination path exists: %s" % \
+            os.path.join(MYSTUFF_PATH, path))
+        sys.exit(1)
+
+    if not os.path.exists(os.path.join(tree, path)):
+        print("error: source path does not exist: %s" % \
+            os.path.join(tree, path))
+        sys.exit(1)
+
+    # We might have to create the category directory
+    category_dir = os.path.dirname(os.path.join(MYSTUFF_PATH, path))
+    if not os.path.exists(category_dir):
+        os.mkdir(category_dir)
+
+    # Copy in from source
+    shutil.copytree( \
+        os.path.join(tree, path), os.path.join(MYSTUFF_PATH, path), \
+        ignore=shutil.ignore_patterns("CVS"))
+
+    # Archive away a copy for merges
+    shutil.copytree(os.path.join(tree, path), os.path.join(ARCHIVE_PATH, path), \
+        ignore=shutil.ignore_patterns("CVS"))
+
+    # Update db
+    curs.execute("INSERT INTO checkout (pkgpath, origin, flags) VALUES " + \
+        "(?, ?, ?)", (path, origin, 0))
+    db.commit()
+
+    print("port checked out into %s" % (os.path.join(MYSTUFF_PATH, path)))
 
 def cmd_new(db, path):
     check_path_shape(path)
@@ -111,19 +160,18 @@ def cmd_ci(db, path):
 
             # if the file exists, we merge
             if os.path.exists(wip_path):
-                sys.stdout.write("Merging '%s'..." % mystuff_path)
+                sys.stdout.write("merging '%s'..." % mystuff_path)
 
-                print("I would run: %s" % ("%s %s %s %s" % (MERGE, wip_path, archive_path, mystuff_path)))
                 status = subprocess.call([MERGE, wip_path, archive_path, mystuff_path])
 
                 if status == MERGE_OK:
                     print("OK")
                 elif status == MERGE_CONFLICT:
+                    print("FAIL")
                     status = status | STATUS_CONFLICT
 
-                    print("\nThere was a merge conflict!")
-
-                    print("Hit enter to resolve this by hand")
+                    print("error: there was a merge conflict!")
+                    print("hit enter to resolve this by hand")
                     raw_input()
 
                     EDITOR = os.getenv("EDITOR")
@@ -143,18 +191,35 @@ def cmd_ci(db, path):
                 print("Copying in new file '%s'" % mystuff_path)
                 shutil.copyfile(mystuff_path, wip_path)
 
-        if status & STATUS_CONFLICT != 0:
-            print("warning: merge conflicts occurred!")
-            print("       : if you were able to resolved these, " + \
-                "run 'owip.py resolved %s'" % path)
-            print("       : or you may wosh to run 'owip.py reset %s' " + \
-                "to roll back %s." % os.path.join(WIP_PATH, path))
-            print("       : if you do the latter your sandbox will remain untouched")
-        else:
-            curs.execute("DELETE FROM checkout WHERE pkgpath = ?", (path, ))
-            db.commit()
-            print("checkin was successful")
-            print("now use git to commit your work to openbsd-wip")
+    if status & STATUS_CONFLICT != 0:
+        print("warning: merge conflicts occurred!")
+        print("       : if you were able to resolved these, " + \
+            "run 'owip.py resolved %s'" % path)
+        print("       : or you may wosh to run 'owip.py reset %s' " + \
+            "to roll back %s." % os.path.join(WIP_PATH, path))
+        print("       : if you do the latter your sandbox will remain untouched")
+    else:
+        clear_checkout(db, path)
+        print("checkin was successful")
+        print("now go to %s and use git to commit your work to openbsd-wip" % \
+            os.path.join(WIP_PATH, path))
+
+def clear_checkout(db, path):
+    check_path_shape(path)
+
+    category = os.path.join(MYSTUFF_PATH, os.path.dirname(path))
+    shutil.rmtree(os.path.join(MYSTUFF_PATH, path))
+
+    # if this was the last port in category, rm category dir too
+    if len(os.listdir(category)) == 0:
+        os.rmdir(category)
+
+    db.cursor().execute("DELETE FROM checkout WHERE pkgpath = ?", (path, ))
+    db.commit()
+
+# informs owip that you manually resolved a merge conflict
+def cmd_resolved(db, path):
+    pass
 
 # discards work in your sandbox
 def cmd_trash(db, path):
@@ -172,11 +237,11 @@ def cmd_status(db):
 
 owip_cmds = {
         # command name  (function,  n_args, help)
-        "co" :      (cmd_co,    1,  "checks code out into your sandbox"),
-        "ci" :      (cmd_ci,    1,  "merges code back into openbsd-wip"),
-        "trash" :   (cmd_trash, 1,  "discards work in your sandbox"),
+        "co" :      (cmd_co,    2,  "<tree> <pkgpath>. checks out into your sandbox"),
+        "ci" :      (cmd_ci,    1,  "<pkgpath>. merges code back into openbsd-wip"),
+        "trash" :   (cmd_trash, 1,  "<pkgpath>. discards work in your sandbox"),
         "status" :  (cmd_status,0,  "show what you have checked out etc."),
-        "new" :     (cmd_new,   1,  "start work on a new port"),
+        "new" :     (cmd_new,   1,  "<pkgpath>. start work on a new port"),
         }
 
 # --------------------------------------------------------
@@ -188,9 +253,9 @@ def get_origin_str(ocode):
     if ocode == ORIGIN_NEW:
         return "new port"
     elif ocode == ORIGIN_WIP:
-        return MYSTUFF_PATH
+        return "openbsd-ports-wip"
     elif ocode == ORIGIN_PORTS:
-        return PORTS_PATH
+        return "official ports tree"
 
     print("error: unknown origin: %d" % ocode)
     sys.exit(1)
