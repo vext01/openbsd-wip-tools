@@ -46,7 +46,7 @@ def cmd_co(db, tree_name, path):
     # sanity checks
     curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
     if len(curs.fetchall()) != 0:
-        print("error: already checked out in %s" % \
+        print("Error: Already checked out in %s" % \
             os.path.join(MYSTUFF_PATH, path))
         sys.exit(1)
 
@@ -57,16 +57,16 @@ def cmd_co(db, tree_name, path):
         tree = PORTS_PATH
         origin = ORIGIN_PORTS
     else:
-        print("error: bad tree path. Should be either 'wip' or 'main'")
+        print("Error: Bad tree path. Should be either 'wip' or 'main'")
         sys.exit(1)
 
     if os.path.exists(os.path.join(MYSTUFF_PATH, path)):
-        print("error: destination path exists: %s" % \
+        print("error: Destination path exists: %s" % \
             os.path.join(MYSTUFF_PATH, path))
         sys.exit(1)
 
     if not os.path.exists(os.path.join(tree, path)):
-        print("error: source path does not exist: %s" % \
+        print("error: Source path does not exist: %s" % \
             os.path.join(tree, path))
         sys.exit(1)
 
@@ -89,7 +89,7 @@ def cmd_co(db, tree_name, path):
         "(?, ?, ?)", (path, origin, 0))
     db.commit()
 
-    print("port checked out into %s" % (os.path.join(MYSTUFF_PATH, path)))
+    print("Port checked out into %s" % (os.path.join(MYSTUFF_PATH, path)))
 
 def cmd_new(db, path):
     check_path_shape(path)
@@ -98,13 +98,13 @@ def cmd_new(db, path):
     # sanity checks
     curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
     if len(curs.fetchall()) != 0:
-        print("error: already checked out in %s" % \
+        print("Error: Already checked out in %s" % \
             os.path.join(MYSTUFF_PATH, path))
         sys.exit(1)
 
     for tree in [WIP_PATH, PORTS_PATH, MYSTUFF_PATH]: 
         if os.path.exists(os.path.join(tree, path)):
-            print("error: path already exists in %s" % tree)
+            print("Error: Path already exists in %s" % tree)
             sys.exit(1)
 
     # Copy in a skeleton port
@@ -132,18 +132,18 @@ def cmd_ci(db, path):
     curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
     rows = curs.fetchall()
     if len(rows) != 1:
-        print("error: not checked out" % \
+        print("Error: Not checked out" % \
             os.path.join(MYSTUFF_PATH, path))
         sys.exit(1)
 
     if rows[0][2] == STATUS_CONFLICT:
-        print("error: this path is in conflict. merge manually and use " + \
-            "'owip.py resolved %s" % path)
+        print("Error: This path is in conflict. merge manually and use " + \
+            "'owip.py resolved %s'" % path)
         sys.exit(1)
 
     for tree in [MYSTUFF_PATH, ARCHIVE_PATH]:
         if not os.path.exists(os.path.join(tree, path)):
-            print("error: can't find checkout in %s" % tree)
+            print("Error: Can't find checkout in %s" % tree)
             sys.exit(1)
 
     status = 0
@@ -160,70 +160,105 @@ def cmd_ci(db, path):
 
             # if the file exists, we merge
             if os.path.exists(wip_path):
-                sys.stdout.write("merging '%s'..." % mystuff_path)
+                merge_print = mystuff_path.replace(MYSTUFF_PATH, "")
+                sys.stdout.write("merging '%s'..." % merge_print)
 
-                status = subprocess.call([MERGE, wip_path, archive_path, mystuff_path])
+                merge_st = subprocess.call( \
+                    [MERGE, wip_path, archive_path, mystuff_path])
 
-                if status == MERGE_OK:
-                    print("OK")
-                elif status == MERGE_CONFLICT:
-                    print("FAIL")
+                if merge_st == MERGE_OK:
+                    print(" [ OK ]")
+                elif merge_st == MERGE_CONFLICT:
+                    print("[ FAIL ]")
                     status = status | STATUS_CONFLICT
 
-                    print("error: there was a merge conflict!")
-                    print("hit enter to resolve this by hand")
+                    print("Error: There was a merge conflict!")
+                    print("       Hit enter to resolve this by hand...")
                     raw_input()
 
                     EDITOR = os.getenv("EDITOR")
                     if EDITOR is None:
                         EDITOR = "/usr/bin/vi"
 
-                    status = subprocess.call([EDITOR, wip_path])
-                    if status != 0:
-                        print("error: failed to invoke editor, merge it yourself ;)")
+                    ed_stat = subprocess.call([EDITOR, wip_path])
+                    if ed_stat != 0:
+                        print("Error: Failed to invoke editor, merge it yourself ;)")
                         sys.exit(1)
-
                 else:
-                    print("error: Merge failed: merge returned: %d" % status)
-                    print("     : This sould not happen -- your sandbox state is inconsistent")
+                    print("Error: Merge failed: merge returned: %d" % status)
+                    print("     : This sould not happen, thus your sandbox state is inconsistent")
                     sys.exit(1)
             else:
                 print("Copying in new file '%s'" % mystuff_path)
                 shutil.copyfile(mystuff_path, wip_path)
 
     if status & STATUS_CONFLICT != 0:
-        print("warning: merge conflicts occurred!")
-        print("       : if you were able to resolved these, " + \
-            "run 'owip.py resolved %s'" % path)
-        print("       : or you may wosh to run 'owip.py reset %s' " + \
-            "to roll back %s." % os.path.join(WIP_PATH, path))
-        print("       : if you do the latter your sandbox will remain untouched")
+        curs.execute("UPDATE checkout SET flags = ? WHERE pkgpath = ?", \
+            (status, path))
+        db.commit()
+        print("Warning: Merge conflicts occurred!")
+        print("       : If you were able to resolve these, " + \
+            "run 'owip.py resolved %s'." % path)
+        print("       : Your sandbox is untouched")
     else:
         clear_checkout(db, path)
-        print("checkin was successful")
-        print("now go to %s and use git to commit your work to openbsd-wip" % \
+        print("Checkin was successful!")
+        print("Now go to %s and use git to commit your work to openbsd-wip" % \
             os.path.join(WIP_PATH, path))
 
 def clear_checkout(db, path):
     check_path_shape(path)
 
-    category = os.path.join(MYSTUFF_PATH, os.path.dirname(path))
-    shutil.rmtree(os.path.join(MYSTUFF_PATH, path))
+    for tree in [MYSTUFF_PATH, ARCHIVE_PATH]:
+        category = os.path.join(tree, os.path.dirname(path))
+        shutil.rmtree(os.path.join(tree, path))
 
-    # if this was the last port in category, rm category dir too
-    if len(os.listdir(category)) == 0:
-        os.rmdir(category)
+        # if this was the last port in category, rm category dir too
+        if len(os.listdir(category)) == 0:
+            os.rmdir(category)
 
     db.cursor().execute("DELETE FROM checkout WHERE pkgpath = ?", (path, ))
     db.commit()
 
 # informs owip that you manually resolved a merge conflict
 def cmd_resolved(db, path):
-    pass
+    check_path_shape(path)
+    curs = db.cursor()
+
+    # sanity
+    curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
+    rows = curs.fetchall()
+    if len(rows) != 1:
+        print("Error: Not checked out")
+        sys.exit(1)
+
+    if rows[0][2] & STATUS_CONFLICT == 0:
+        print("Error: %s is not in conflict state" % path)
+        sys.exit(1)
+
+    clear_checkout(db, path)
+
+    print("Conflict cleared. Now go to %s and use git to commit your work to openbsd-wip" % \
+        os.path.join(WIP_PATH, path))
 
 # discards work in your sandbox
-def cmd_trash(db, path):
-    pass
+def cmd_discard(db, path):
+    check_path_shape(path)
+    curs = db.cursor()
+
+    # sanity
+    curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
+    rows = curs.fetchall()
+    if len(rows) != 1:
+        print("Error: Not checked out")
+        sys.exit(1)
+
+    if rows[0][2] & STATUS_CONFLICT != 0:
+        print("Error: %s is in conflict state" % path)
+        sys.exit(1)
+
+    clear_checkout(db, path)
+    print("Discarded %s" % path)
 
 def cmd_status(db):
     curs = db.cursor()
@@ -237,11 +272,12 @@ def cmd_status(db):
 
 owip_cmds = {
         # command name  (function,  n_args, help)
-        "co" :      (cmd_co,    2,  "<tree> <pkgpath>. checks out into your sandbox"),
-        "ci" :      (cmd_ci,    1,  "<pkgpath>. merges code back into openbsd-wip"),
-        "trash" :   (cmd_trash, 1,  "<pkgpath>. discards work in your sandbox"),
-        "status" :  (cmd_status,0,  "show what you have checked out etc."),
-        "new" :     (cmd_new,   1,  "<pkgpath>. start work on a new port"),
+        "co" :      (cmd_co,      2, "<tree> <pkgpath>. Checks out from <tree> into your sandbox"),
+        "ci" :      (cmd_ci,      1, "<pkgpath>. Merges code back into openbsd-wip"),
+        "discard" : (cmd_discard, 1, "<pkgpath>. Discards work in your sandbox"),
+        "new" :     (cmd_new,     1, "<pkgpath>. Start work on a new port"),
+        "status" :  (cmd_status,  0, "Show what you have checked out etc."),
+        "resolved" :(cmd_resolved,1, "<pkgpath>. Marks a conflict resolved"),
         }
 
 # --------------------------------------------------------
