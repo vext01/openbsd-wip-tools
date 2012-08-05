@@ -48,7 +48,7 @@ def cmd_co(db, tree_name, path):
     if len(curs.fetchall()) != 0:
         print("Error: Already checked out in %s" % \
             os.path.join(MYSTUFF_PATH, path))
-        sys.exit(1)
+        exit_nicely(db)
 
     if tree_name == "wip":
         tree = WIP_PATH
@@ -58,17 +58,17 @@ def cmd_co(db, tree_name, path):
         origin = ORIGIN_PORTS
     else:
         print("Error: Bad tree path. Should be either 'wip' or 'main'")
-        sys.exit(1)
+        exit_nicely(db)
 
     if os.path.exists(os.path.join(MYSTUFF_PATH, path)):
         print("error: Destination path exists: %s" % \
             os.path.join(MYSTUFF_PATH, path))
-        sys.exit(1)
+        exit_nicely(db)
 
     if not os.path.exists(os.path.join(tree, path)):
         print("error: Source path does not exist: %s" % \
             os.path.join(tree, path))
-        sys.exit(1)
+        exit_nicely(db)
 
     # We might have to create the category directory
     category_dir = os.path.dirname(os.path.join(MYSTUFF_PATH, path))
@@ -100,12 +100,12 @@ def cmd_new(db, path):
     if len(curs.fetchall()) != 0:
         print("Error: Already checked out in %s" % \
             os.path.join(MYSTUFF_PATH, path))
-        sys.exit(1)
+        exit_nicely(db)
 
     for tree in [WIP_PATH, PORTS_PATH, MYSTUFF_PATH]: 
         if os.path.exists(os.path.join(tree, path)):
             print("Error: Path already exists in %s" % tree)
-            sys.exit(1)
+            exit_nicely(db)
 
     # Copy in a skeleton port
     os.makedirs(os.path.join(MYSTUFF_PATH, path))
@@ -134,17 +134,17 @@ def cmd_ci(db, path):
     if len(rows) != 1:
         print("Error: Not checked out" % \
             os.path.join(MYSTUFF_PATH, path))
-        sys.exit(1)
+        exit_nicely(db)
 
     if rows[0][2] == STATUS_CONFLICT:
-        print("Error: This path is in conflict. merge manually and use " + \
-            "'owip.py resolved %s'" % path)
-        sys.exit(1)
+        print("Error: This path is in conflict. merge manually (in %s) and use " + \
+            "'owip.py resolved %s'" % (path, os.path.join(WIP_PATH, path)))
+        exit_nicely(db)
 
     for tree in [MYSTUFF_PATH, ARCHIVE_PATH]:
         if not os.path.exists(os.path.join(tree, path)):
             print("Error: Can't find checkout in %s" % tree)
-            sys.exit(1)
+            exit_nicely(db)
 
     status = 0
     for dirname, dirnames, filenames in os.walk(os.path.join(MYSTUFF_PATH, path)):
@@ -183,11 +183,11 @@ def cmd_ci(db, path):
                     ed_stat = subprocess.call([EDITOR, wip_path])
                     if ed_stat != 0:
                         print("Error: Failed to invoke editor, merge it yourself ;)")
-                        sys.exit(1)
+                        exit_nicely(db)
                 else:
                     print("Error: Merge failed: merge returned: %d" % status)
                     print("     : This sould not happen, thus your sandbox state is inconsistent")
-                    sys.exit(1)
+                    exit_nicely(db)
             else:
                 print("Copying in new file '%s'" % mystuff_path)
                 shutil.copyfile(mystuff_path, wip_path)
@@ -230,11 +230,11 @@ def cmd_resolved(db, path):
     rows = curs.fetchall()
     if len(rows) != 1:
         print("Error: Not checked out")
-        sys.exit(1)
+        exit_nicely(db)
 
     if rows[0][2] & STATUS_CONFLICT == 0:
         print("Error: %s is not in conflict state" % path)
-        sys.exit(1)
+        exit_nicely(db)
 
     clear_checkout(db, path)
 
@@ -251,11 +251,11 @@ def cmd_discard(db, path):
     rows = curs.fetchall()
     if len(rows) != 1:
         print("Error: Not checked out")
-        sys.exit(1)
+        exit_nicely(db)
 
     if rows[0][2] & STATUS_CONFLICT != 0:
         print("Error: %s is in conflict state" % path)
-        sys.exit(1)
+        exit_nicely(db)
 
     clear_checkout(db, path)
     print("Discarded %s" % path)
@@ -294,7 +294,7 @@ def get_origin_str(ocode):
         return "official ports tree"
 
     print("error: unknown origin: %d" % ocode)
-    sys.exit(1)
+    exit_nicely(db)
 
 def get_status_str(flags):
     fstr = ""
@@ -324,7 +324,7 @@ def check_path_shape(path):
     if err:
         print("error: Malformed ports path.")
         print("    Paths should be of the form 'category/dir'")
-        sys.exit(1)
+        exit_nicely(db)
 
 def connect_db():
     if not os.path.exists(MYSTUFF_PATH):
@@ -342,6 +342,10 @@ def connect_db():
         "flags INT)")
 
     return db
+
+def exit_nicely(db):
+    db.close()
+    sys.exit(1)
 
 # --------------------------------------------------------
 # Main
@@ -369,3 +373,5 @@ if __name__ == "__main__":
     args = [db]
     args.extend(sys.argv[2:])
     tup[0](*args)
+
+    db.close()
