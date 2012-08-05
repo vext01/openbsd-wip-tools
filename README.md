@@ -2,7 +2,7 @@ OpenBSD-WIP-Tools
 =================
 
 This is a wrapper around cp(1) and merge(1) which allows ports hackers using
-on the unofficial openbsd-wip tree to work on their ports in isolation of the
+the unofficial openbsd-wip tree to work on their ports in isolation of the
 rest of the git tree. This means other people's work can not interfere with
 your own (unless you want it to).
 
