@@ -31,16 +31,16 @@ When you want to work on a new port, you would run:
 
         owip.py new <pkgpath>
 
-Where pkgpath would be of the form `category/port`. This copys a skeleton port
+Where `<pkgpath>` would be of the form `category/port`. This copys a skeleton port
 into your sandbox.
 
 When you want to work on an existing port, you would run:
 
         owip.py co <tree> <pkgpath>
 
-Where `<pkgpath>` would be of the form `category/port` and <tree> is
+Where `<pkgpath>` would be of the form `category/port` and `<tree>` is
 either 'main' or 'wip' depending upon where the port should come from
-(/usr/ports/<pkgpath> or /usr/ports/openbsd-wip/<pkgpath> respectively).
+(/usr/ports/`<pkgpath>` or /usr/ports/openbsd-wip/`<pkgpath>` respectively).
 
 To see what you have checked out into your sandbox (and the status of
 your checkouts), run:
