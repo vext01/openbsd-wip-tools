@@ -5,6 +5,7 @@ import getopt
 import os.path
 import shutil
 import subprocess
+import sqlite3
 
 # --------------------------------------------------------
 # Various globals
@@ -15,6 +16,7 @@ WIP_PATH = "/usr/ports/openbsd-wip"
 MYSTUFF_PATH = "/usr/ports/mystuff"
 PORTS_PATH = "/usr/ports"
 ARCHIVE_PATH = os.path.join(MYSTUFF_PATH, ".owip")
+DB_PATH = os.path.join(MYSTUFF_PATH, ".owip", "sandbox.db")
 
 # bsd merge
 MERGE = "/usr/bin/merge"
@@ -24,16 +26,31 @@ MERGE_OK = 0
 MERGE_CONFLICT = 1
 MERGE_ERROR = 2
 
+ORIGIN_NEW = 0
+ORIGIN_WIP = 1
+ORIGIN_PORTS = 2 # as in official CVS
+
+# Status flags (more later perhaps)
+STATUS_CONFLICT = 1 << 0
+
 # --------------------------------------------------------
 # Commands
 # --------------------------------------------------------
 
 # checks code out for work
-def cmd_co(path):
+def cmd_co(db, path):
     pass
 
-def cmd_new(path):
+def cmd_new(db, path):
     check_path_shape(path)
+    curs = db.cursor()
+
+    # sanity checks
+    curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
+    if len(curs.fetchall()) != 0:
+        print("error: already checked out in %s" % \
+            os.path.join(MYSTUFF_PATH, path))
+        sys.exit(1)
 
     for tree in [WIP_PATH, PORTS_PATH, MYSTUFF_PATH]: 
         if os.path.exists(os.path.join(tree, path)):
@@ -48,9 +65,16 @@ def cmd_new(path):
 
     # Archive away a copy for merges
     shutil.copytree(os.path.join(MYSTUFF_PATH, path), os.path.join(ARCHIVE_PATH, path))
-        
+
+    # Update db
+    curs.execute("INSERT INTO checkout (pkgpath, origin, flags) VALUES " + \
+        "(?, ?, ?)", (path, ORIGIN_NEW, 0))
+    db.commit()
+
+    print("New port checked out into %s" % (os.path.join(MYSTUFF_PATH, path)))
+
 # merges code back into the tree
-def cmd_ci(path):
+def cmd_ci(db, path):
 
     # sanity checks
     for tree in [MYSTUFF_PATH, ARCHIVE_PATH]:
@@ -104,11 +128,18 @@ def cmd_ci(path):
                 shutil.copyfile(mystuff_path, wip_path)
 
 # discards work in your sandbox
-def cmd_trash(path):
+def cmd_trash(db, path):
     pass
 
-def cmd_status(path):
-    pass
+def cmd_status(db):
+    curs = db.cursor()
+
+    curs.execute("SELECT * FROM checkout")
+    rows = curs.fetchall()
+
+    for r in rows:
+        print("%s\n    origin: %s\n    flags: %s" % \
+            (r[0], get_origin_str(r[1]), get_status_str(r[2])))
 
 owip_cmds = {
         # command name  (function,  n_args, help)
@@ -122,6 +153,27 @@ owip_cmds = {
 # --------------------------------------------------------
 # The rest
 # --------------------------------------------------------
+
+
+def get_origin_str(ocode):
+    if ocode == ORIGIN_NEW:
+        return "new port"
+    elif ocode == ORIGIN_WIP:
+        return MYSTUFF_PATH
+    elif ocode == ORIGIN_PORTS:
+        return PORTS_PATH
+
+    print("error: unknown origin: %d" % ocode)
+    sys.exit(1)
+
+def get_status_str(flags):
+    fstr = ""
+
+    if (flags & STATUS_CONFLICT):
+        fstr += "CONFLICT"
+
+    return fstr
+
 
 def usage():
     print("Usage: owip.py cmd <args>")
@@ -144,12 +196,22 @@ def check_path_shape(path):
         print("    Paths should be of the form 'category/dir'")
         sys.exit(1)
 
-def scaffold_dirs():
+def connect_db():
     if not os.path.exists(MYSTUFF_PATH):
         os.mkdir(MYSTUFF_PATH)
 
     if not os.path.exists(ARCHIVE_PATH):
         os.mkdir(ARCHIVE_PATH)
+
+    db = sqlite3.connect(DB_PATH)
+    curs = db.cursor()
+
+    curs.execute("CREATE TABLE IF NOT EXISTS checkout (" + \
+        "pkgpath STRING PRIMAMRY KEY, " + \
+        "origin INT, " + \
+        "flags INT)")
+
+    return db
 
 # --------------------------------------------------------
 # Main
@@ -171,8 +233,9 @@ if __name__ == "__main__":
         usage()
         sys.exit(1)
 
-    scaffold_dirs()
+    db = connect_db()
 
     # dispatch
-    tup[0](*sys.argv[2:])
-
+    args = [db]
+    args.extend(sys.argv[2:])
+    tup[0](*args)
