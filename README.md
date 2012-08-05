@@ -40,8 +40,9 @@ When you want to work on an existing port, you would run:
 
 Where `<pkgpath>` would be of the form `category/port` and `<tree>` is
 either `main` or `wip` depending upon where the port should come from
-(/usr/ports/`<pkgpath>` or /usr/ports/openbsd-wip/`<pkgpath>` respectively).
+(`/usr/ports/<pkgpath>` or /`usr/ports/openbsd-wip/<pkgpath>` respectively).
 
+You may have as many ports as is required in your sandbox at one time.
 To see what you have checked out into your sandbox (and the status of
 your checkouts), run:
 
@@ -52,7 +53,8 @@ Once you want to commit your work to the openbsd-wip repo:
         owip.py ci <pkgpath>
 
 If all went well, then you can continue to use git to add new files and
-commit changes in your openbsd-wip checkout in /usr/ports/openbsd-wip.
+commit changes in your openbsd-wip checkout in
+`/usr/ports/openbsd-wip/<pkgpath>`.
 
 If on the other hand a merge conflict occurs, then you will be guided through
 conflict resolution. After you have manually merged conflicts, you run:
