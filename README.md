@@ -59,5 +59,7 @@ conflict resolution. After you have manually merged conflicts, you run:
 
         owip.py resolved <pkgpath>
 
-The only remaining command is the 'discard' command which discards a port
-in your sandbox without merging changes back into openbsd-wip.
+The only remaining command is the 'discard' command which discards a
+port in your sandbox without merging changes back into openbsd-wip. This
+is useful when you are just testing other people's diffs from the
+mailing list, for example.
