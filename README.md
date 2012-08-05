@@ -28,7 +28,8 @@ your own isolated sandbox (/usr/ports/mystuff) and merge the results
 back into your openbsd-wip git checkout.
 
 When you want to work on a new port, you would run:
-		owip.py new <pkgpath>
+
+        owip.py new <pkgpath>
 
 Where pkgpath would be of the form `category/port`. This copys a skeleton port
 into your sandbox.
