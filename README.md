@@ -38,7 +38,7 @@ When you want to work on an existing port, you would run:
 
         owip.py co <tree> <pkgpath>
 
-Where <pkgpath> would be of the form `category/port` and <tree> is
+Where `<pkgpath>` would be of the form `category/port` and <tree> is
 either 'main' or 'wip' depending upon where the port should come from
 (/usr/ports/<pkgpath> or /usr/ports/openbsd-wip/<pkgpath> respectively).
 
