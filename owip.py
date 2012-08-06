@@ -146,8 +146,7 @@ def cmd_ci(db, path):
     curs.execute("SELECT * FROM checkout WHERE pkgpath = ?", (path, ))
     rows = curs.fetchall()
     if len(rows) != 1:
-        print("Error: Not checked out" % \
-            os.path.join(MYSTUFF_PATH, path))
+        print("Error: Not checked out")
         exit_nicely(db)
 
     if rows[0][2] == STATUS_CONFLICT:
