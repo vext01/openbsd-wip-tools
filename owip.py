@@ -159,6 +159,7 @@ def cmd_ci(db, path):
             print("Error: Can't find checkout in %s" % tree)
             exit_nicely(db)
 
+    # does the merge back into the wip tree
     status = 0
     for dirname, dirnames, filenames in os.walk(os.path.join(MYSTUFF_PATH, path)):
         for fn in filenames:
@@ -173,7 +174,7 @@ def cmd_ci(db, path):
 
             # if the file exists, we merge
             if os.path.exists(wip_path):
-                merge_print = mystuff_path.replace(MYSTUFF_PATH, "")
+                merge_print = mystuff_path.replace(MYSTUFF_PATH, "")[1:]
                 sys.stdout.write("merging '%s'..." % merge_print)
 
                 merge_st = subprocess.call( \
@@ -204,6 +205,21 @@ def cmd_ci(db, path):
             else:
                 print("Copying in new file '%s'" % mystuff_path)
                 shutil.copyfile(mystuff_path, wip_path)
+
+    # now we check each path in the archive against the sandbox
+    # we are looking for deleted files now.
+    for dirname, dirnames, filenames in os.walk(os.path.join(ARCHIVE_PATH, path)):
+        for fn in filenames:
+
+            archive_path = os.path.join(dirname, fn)
+            wip_path = archive_path.replace(ARCHIVE_PATH, WIP_PATH)
+            mystuff_path = archive_path.replace(ARCHIVE_PATH, MYSTUFF_PATH)
+
+            # if the file is gone, we need to remove it from the wip path too
+            if not os.path.exists(mystuff_path):
+                del_print = mystuff_path.replace(MYSTUFF_PATH, "")[1:]
+                print("removed '%s'" % del_print)
+                os.unlink(wip_path)
 
     if status & STATUS_CONFLICT != 0:
         curs.execute("UPDATE checkout SET flags = ? WHERE pkgpath = ?", \
@@ -290,6 +306,7 @@ owip_cmds = {
         "discard" : (cmd_discard, 1, "<pkgpath>. Discards work in your sandbox"),
         "new" :     (cmd_new,     1, "<pkgpath>. Start work on a new port"),
         "status" :  (cmd_status,  0, "Show what you have checked out etc."),
+        "ls" :      (cmd_status,  0, "Alias to 'status'"),
         "resolved" :(cmd_resolved,1, "<pkgpath>. Marks a conflict resolved"),
         }
 
