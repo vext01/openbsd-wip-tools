@@ -170,7 +170,7 @@ def cmd_ci(db, path):
 
             # incase of a new checkin, scaffold dirs
             if not os.path.exists(os.path.dirname(wip_path)):
-               os.mkdir(os.path.dirname(wip_path))
+               os.makedirs(os.path.dirname(wip_path))
 
             # if the file exists, we merge
             if os.path.exists(wip_path):
@@ -217,9 +217,10 @@ def cmd_ci(db, path):
 
             # if the file is gone, we need to remove it from the wip path too
             if not os.path.exists(mystuff_path):
-                del_print = mystuff_path.replace(MYSTUFF_PATH, "")[1:]
-                print("removed '%s'" % del_print)
-                os.unlink(wip_path)
+                if  os.path.exists(wip_path):
+                    del_print = mystuff_path.replace(MYSTUFF_PATH, "")[1:]
+                    print("removed '%s'" % del_print)
+                    os.unlink(wip_path)
 
     if status & STATUS_CONFLICT != 0:
         curs.execute("UPDATE checkout SET flags = ? WHERE pkgpath = ?", \
